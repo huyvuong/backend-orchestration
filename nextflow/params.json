@@ -1,0 +1,7 @@
+{
+  "input": "s3://illumina-sequencing-landing-zone-prod/samplesheets/samplesheet_SAMPLE1.csv",
+  "outdir": "s3://illumina-sequencing-landing-zone-prod/results/",
+  "genome": "GRCh38",
+  "tools": "haplotypecaller,strelka",
+  "dragen_mode": false
+}
