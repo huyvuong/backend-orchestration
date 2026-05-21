@@ -1,6 +1,6 @@
 # Automated High-Throughput Clinical Genomic Pipeline Orchestrator
 
-This repository is a mock project of a modern, event-driven architecture designed to orchestrate high-throughput genomics pipelines (like DRAGEN or nf-core/sarek). 
+This repository is a prototype project of a modern, event-driven architecture designed to orchestrate high-throughput genomics pipelines (like DRAGEN or nf-core/sarek). 
 
 It specifically demonstrates deep expertise in:
 - **Backend Systems**: Asynchronous task queuing (Celery/Redis), structured JSON logging, and robust REST APIs (FastAPI).
@@ -29,7 +29,7 @@ It specifically demonstrates deep expertise in:
 You can spin up the backend API, Redis, and PostgreSQL locally using Docker Compose:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 Load Test the Celery Queue:
