@@ -1,8 +1,12 @@
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, List
 from .logger import log
 import os
+
+from .database import get_db
+from .models import Sample
 
 # Simulated Celery import to avoid running real broker in dev unless intended
 try:
@@ -30,7 +34,7 @@ class S3Event(BaseModel):
     Records: List[S3Record]
 
 @app.post("/webhook/s3", status_code=202)
-async def handle_s3_upload(event: S3Event):
+async def handle_s3_upload(event: S3Event, db: Session = Depends(get_db)):
     """
     Webhook to receive S3 Event Notifications when new sequencing data lands.
     Extracts the sample ID and dispatches an async task to Celery to trigger Nextflow.
@@ -55,9 +59,21 @@ async def handle_s3_upload(event: S3Event):
                 "bucket": bucket
             })
             
+            # Register in database
+            db_sample = Sample(
+                sample_id=sample_id,
+                run_id=run_id,
+                bucket=bucket,
+                s3_key=key,
+                status="PENDING"
+            )
+            db.add(db_sample)
+            db.commit()
+            db.refresh(db_sample)
+            
             # Dispatch to Celery Queue
             if dispatch_nextflow_pipeline:
-                dispatch_nextflow_pipeline.delay(sample_id, run_id, bucket, key)
+                dispatch_nextflow_pipeline.delay(db_sample.id, sample_id, run_id, bucket, key)
             else:
                 log.warning("Celery worker not found. Processing skipped.")
 

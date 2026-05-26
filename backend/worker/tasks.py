@@ -2,6 +2,8 @@ import os
 import time
 from celery import Celery
 from app.logger import log
+from app.database import SessionLocal
+from app.models import Sample
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -22,7 +24,7 @@ celery_app.conf.update(
 )
 
 @celery_app.task(bind=True, max_retries=3)
-def dispatch_nextflow_pipeline(self, sample_id: str, run_id: str, bucket: str, s3_key: str):
+def dispatch_nextflow_pipeline(self, sample_db_id: int, sample_id: str, run_id: str, bucket: str, s3_key: str):
     """
     Asynchronous task to template parameters and submit the Nextflow job.
     Includes automatic retries for transient scheduler/network failures.
@@ -40,6 +42,14 @@ def dispatch_nextflow_pipeline(self, sample_id: str, run_id: str, bucket: str, s
         # or uses the Seqera Platform / AWS Batch API.
         mock_batch_job_id = f"job-{sample_id}-12345"
         
+        # Update database status
+        with SessionLocal() as db:
+            sample_record = db.query(Sample).filter(Sample.id == sample_db_id).first()
+            if sample_record:
+                sample_record.status = "DISPATCHED"
+                sample_record.batch_job_id = mock_batch_job_id
+                db.commit()
+
         log.info("Successfully dispatched Nextflow pipeline to scheduler", extra={
             "sample_id": sample_id,
             "run_id": run_id,
@@ -53,5 +63,14 @@ def dispatch_nextflow_pipeline(self, sample_id: str, run_id: str, bucket: str, s
             "sample_id": sample_id,
             "run_id": run_id
         })
+        
+        if self.request.retries >= self.max_retries:
+            # Update database status to FAILED if max retries reached
+            with SessionLocal() as db:
+                sample_record = db.query(Sample).filter(Sample.id == sample_db_id).first()
+                if sample_record:
+                    sample_record.status = "FAILED"
+                    db.commit()
+                    
         # Exponential backoff for retries
         raise self.retry(exc=exc, countdown=2 ** self.request.retries)
